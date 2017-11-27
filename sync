@@ -26,6 +26,7 @@ args = parser.parse_args()
 class Sync:
     def __init__(self, cmd):
         self.cmd = cmd
+        self.root_dir = dirs.root_dir()
 
     def uploads(self):
         print('Downloading uploads from server...')
@@ -56,9 +57,8 @@ class Sync:
 
 def main():
     prechecks()
-    print(dirs.root_dir())
-    # sync = Sync(ssh_init())
-    # sync.plugins()
+    sync = Sync(ssh_init())
+    sync.plugins()
 
 
 main()
