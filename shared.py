@@ -46,7 +46,7 @@ def server_meta():
 def ssh_init():
     meta = server_meta()
     has_docker_machine = subprocess.getoutput(
-        'docker-machine ls -q --filter "name=^{name}$" | wc -l'.format(
+        'docker-machine ls -q --filter "name=^{name}$" | wc -l | awk "{{ print $1 }}"'.format(
             name=meta['name'])) == '1'
     has_ssh = subprocess.getoutput(
         'grep -c "Host {name}" ~/.ssh/config'.format(name=meta['name'])) == '1'
