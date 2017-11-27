@@ -53,7 +53,23 @@ class Sync:
                 root=self.root_dir))
 
     def database(self):
-        pass
+        command = 'ssh' if self.cmd[0] == 'ssh' else 'docker-machine ssh'
+        os.remove('{root}/data/database.sql.bak'.format(root=self.root_dir))
+        os.rename(
+            '{root}/data/database.sql'.format(root=self.root_dir),
+            '{root}/data/database.sql.bak'.format(root=self.root_dir))
+
+        print('Exporting database...')
+        os.system(
+            '{command} {name} "sudo -u {name} docker-compose -f /home/{name}/docker-compose.yml \
+                exec -T wordpress /bin/bash -c \
+                    \'wp db export /data/database.sql --allow-root\'"'.format(
+                command=command, name=meta['name']))
+
+        print('Exporting database to local machine...')
+        self.__runcmd(
+            '"{name}:/home/{name}/app/data/database.sql" "{root}/data/database.sql"'.
+            format(name=meta['name'], root=self.root_dir))
 
     def __runcmd(self, paths):
         os.system('{command} {options} {paths}'.format(
