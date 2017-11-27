@@ -61,7 +61,7 @@ class Sync:
 
         print('Exporting database...')
         os.system(
-            '{command} {name} "sudo -u {name} docker-compose -f /home/{name}/docker-compose.yml \
+            '{command} {name} "sudo -u {name} docker-compose -f /home/{name}/app/docker-compose.yml \
                 exec -T wordpress /bin/bash -c \
                     \'wp db export /data/database.sql --allow-root\'"'.format(
                 command=command, name=meta['name']))
