@@ -63,7 +63,28 @@ class Sync:
 def main():
     prechecks()
     sync = Sync(ssh_init())
-    sync.uploads()
+    arg_count = 0
+    if args.init:
+        sync.database()
+        sync.plugins()
+        sync.theme()
+        sync.uploads()
+        return
+    if args.uploads:
+        sync.uploads()
+        arg_count += 1
+    if args.plugins:
+        sync.plugins()
+        arg_count += 1
+    if args.theme:
+        sync.theme()
+        arg_count += 1
+    if args.database:
+        sync.database()
+        arg_count += 1
+    if arg_count == 0:
+        sync.database()
+        sync.uploads()
 
 
 main()
