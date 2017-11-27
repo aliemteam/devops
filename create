@@ -1,0 +1,55 @@
+#!/usr/bin/env python3.6
+
+import os
+from tempfile import NamedTemporaryFile
+import urllib.request
+import json
+
+from shared import prechecks, dirs
+
+
+def docker_compose_version():
+    docker_compose = json.load(
+        urllib.request.urlopen(
+            "https://api.github.com/repos/docker/compose/releases"))
+    return docker_compose[0]['tag_name']
+
+
+def create_machine():
+    name = input('--> Droplet name: ')
+    size = input('--> Droplet size [2gb]: ') or '2gb'
+    with NamedTemporaryFile(mode='w+') as config_file:
+        with open('{}/cloud-config.yml'.format(dirs.script_dir)) as base_config:
+            ssh_users = ', '.join([
+                '"{}"'.format(x.strip())
+                for x in input(
+                    '--> Additional SSH users (format: gh:githubuser): ')
+                .split(',') if x
+            ])
+            config_file.write(base_config.read().format(
+                name=name,
+                ssh_users=ssh_users,
+                docker_compose_version=docker_compose_version()))
+            config_file.flush()
+        command = """
+            docker-machine create \
+                --driver digitalocean \
+                --digitalocean-access-token={token} \
+                --digitalocean-size={size} \
+                --digitalocean-backups=true \
+                --digitalocean-userdata={userdata_file} \
+                {machine_name}
+        """.format(
+            token=os.getenv('DIGITALOCEAN_ACCESS_TOKEN'),
+            size=size,
+            userdata_file=config_file.name,
+            machine_name=name)
+        os.system(command)
+
+
+def main():
+    prechecks()
+    create_machine()
+
+
+main()
