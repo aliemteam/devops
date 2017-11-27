@@ -37,7 +37,9 @@ class Sync:
     def plugins(self):
         paths = '"{name}:/home/{name}/app/wp-content/plugins/{plugin}" "{root}/wp-content/plugins"'
         for plugin in meta['plugins']:
-            self.__runcmd(paths.format(name=meta['name'], plugin=plugin))
+            self.__runcmd(
+                paths.format(
+                    name=meta['name'], plugin=plugin, root=self.root_dir))
 
     def theme(self):
         self.__runcmd(
@@ -45,7 +47,7 @@ class Sync:
             format(
                 name=meta['name'],
                 theme=meta['base_theme'],
-                root=dirs.root_dir))
+                root=self.root_dir))
 
     def database(self):
         pass
