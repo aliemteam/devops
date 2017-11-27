@@ -2,11 +2,8 @@
 
 import argparse
 import os
-import subprocess
-from textwrap import dedent
-from sys import exit
 
-from shared import dirs, prechecks, server_meta
+from shared import dirs, prechecks, server_meta, ssh_init
 
 meta = server_meta()
 
@@ -24,33 +21,6 @@ parser.add_argument('-t', '--theme', help='Sync theme', action='store_true')
 parser.add_argument(
     '-d', '--database', help='Sync database', action='store_true')
 args = parser.parse_args()
-
-
-def ssh_init():
-    has_docker_machine = subprocess.getoutput(
-        'docker-machine ls -q --filter "name={name}" | wc -l'.format(
-            name=meta['name'])) == '1'
-    has_ssh = subprocess.getoutput(
-        'grep -c "Host {name}" ~/.ssh/config'.format(name=meta['name'])) == '1'
-    if has_docker_machine:
-        return ('docker-machine', 'scp -rd')
-    elif has_ssh:
-        return ('rsync', '-avz')
-    else:
-        print(
-            dedent("""
-        ERROR: Could not locate a docker-machine or ssh identity for {name}
-
-        To enable SSH connections, add the following to your ~/.ssh/config file:
-
-        Host {name}
-            HostName <ip-address-of-server>
-            Port 22
-            User {name}
-            IdentityFile ~/.ssh/<name-of-our-private-key-file>
-
-        """.format(name=meta['name'])))
-        exit(1)
 
 
 class Sync:

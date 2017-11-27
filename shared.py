@@ -1,5 +1,8 @@
 import os
 import json
+import subprocess
+from textwrap import dedent
+from sys import exit
 
 
 class dirs:
@@ -24,3 +27,31 @@ def server_meta():
     with open('{}/package.json'.format(os.getcwd())) as packagejson:
         file = json.load(packagejson)
         return file['server']
+
+
+def ssh_init():
+    meta = server_meta()
+    has_docker_machine = subprocess.getoutput(
+        'docker-machine ls -q --filter "name={name}" | wc -l'.format(
+            name=meta['name'])) == '1'
+    has_ssh = subprocess.getoutput(
+        'grep -c "Host {name}" ~/.ssh/config'.format(name=meta['name'])) == '1'
+    if has_docker_machine:
+        return ('docker-machine', 'scp -rd')
+    elif has_ssh:
+        return ('rsync', '-avz')
+    else:
+        print(
+            dedent("""
+        ERROR: Could not locate a docker-machine or ssh identity for {name}
+
+        To enable SSH connections, add the following to your ~/.ssh/config file:
+
+        Host {name}
+            HostName <ip-address-of-server>
+            Port 22
+            User {name}
+            IdentityFile ~/.ssh/<name-of-our-private-key-file>
+
+        """.format(name=meta['name'])))
+        exit(1)
