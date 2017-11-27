@@ -32,16 +32,19 @@ class Sync:
         print('Downloading uploads from server...')
         self.__runcmd(
             '"{name}:/home/{name}/app/wp-content/uploads/" "{root}/wp-content/uploads"'.
-            format(name=meta['name'], root=dirs.root_dir))
+            format(name=meta['name'], root=self.root_dir))
 
     def plugins(self):
+        print('Downloading plugins from server...')
         paths = '"{name}:/home/{name}/app/wp-content/plugins/{plugin}" "{root}/wp-content/plugins"'
         for plugin in meta['plugins']:
+            print('--> Downloading plugin {}'.format(plugin))
             self.__runcmd(
                 paths.format(
                     name=meta['name'], plugin=plugin, root=self.root_dir))
 
     def theme(self):
+        print('Downloading theme from server...')
         self.__runcmd(
             '"{name}:/home/{name}/app/wp-content/themes/{theme}" "{root}/wp-content/plugins"'.
             format(
@@ -60,7 +63,7 @@ class Sync:
 def main():
     prechecks()
     sync = Sync(ssh_init())
-    sync.plugins()
+    sync.uploads()
 
 
 main()
