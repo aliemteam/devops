@@ -13,10 +13,8 @@ parser.add_argument(
     '--init',
     help='Syncs everything. Run this on initial setup',
     action='store_true')
-parser.add_argument(
-    '-u', '--uploads', help='Sync uploads', action='store_true')
-parser.add_argument(
-    '-p', '--plugins', help='Sync plugins', action='store_true')
+parser.add_argument('-u', '--uploads', help='Sync uploads', action='store_true')
+parser.add_argument('-p', '--plugins', help='Sync plugins', action='store_true')
 parser.add_argument('-t', '--theme', help='Sync theme', action='store_true')
 parser.add_argument(
     '-d', '--database', help='Sync database', action='store_true')
@@ -24,6 +22,7 @@ args = parser.parse_args()
 
 
 class Sync:
+
     def __init__(self, cmd):
         self.cmd = cmd
         self.root_dir = dirs.root_dir()
@@ -48,8 +47,7 @@ class Sync:
         self.__runcmd(
             '"{name}:/home/{name}/app/wp-content/themes/{theme}" "{root}/wp-content/plugins"'.
             format(
-                name=meta['name'],
-                theme=meta['base_theme'],
+                name=meta['name'], theme=meta['base_theme'],
                 root=self.root_dir))
 
     def database(self):

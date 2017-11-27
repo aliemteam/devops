@@ -24,7 +24,8 @@ def create_machine():
                 '"{}"'.format(x.strip())
                 for x in input(
                     '--> Additional SSH users (format: gh:githubuser): ')
-                .split(',') if x
+                .split(',')
+                if x
             ])
             config_file.write(base_config.read().format(
                 name=name,

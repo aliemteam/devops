@@ -1,0 +1,122 @@
+#!/usr/bin/env python3.6
+
+import argparse
+import os
+from sys import exit
+
+from shared import dirs, server_meta, ssh_init, prechecks
+
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    '-a',
+    '--all',
+    help='Deploy all plugins, base theme, and child theme',
+    action='store_true')
+parser.add_argument(
+    '-i',
+    '--initial',
+    help='Deploy everything including configs, database, & uploads',
+    action='store_true')
+args = parser.parse_args()
+
+meta = server_meta()
+root = dirs.root_dir()
+
+
+class Deploy:
+
+    def __init__(self):
+        self.cmd = ssh_init()
+
+    def site(self):
+        print('Removing old version of {name}...'.format(**meta))
+        self.__sshcmd(
+            'rm -rf /home/{name}/app/wp-content/themes/{name}/*'.format(**meta))
+
+        print('Deploying {name}...'.format(**meta))
+        self.__runcmd(
+            '"{root}/dist/{name}" "{name}:/home/{name}/app/wp-content/themes"'.
+            format(root=root, **meta))
+
+    def initial(self):
+        for filename in ['.env', 'lib/production.yml', 'data/database.sql']:
+            if not os.path.isfile('{root}/{file}'.format(
+                    root=root, file=filename)):
+                raise FileNotFoundError(
+                    'File "{file}" could not be found'.format(file=filename))
+                exit(1)
+
+        print('Deploying .env...')
+        self.__runcmd('"{root}/.env" "{name}:/home/{name}/app/.env"'.format(
+            root=root, **meta))
+
+        print('Deploying docker-compose.yml...')
+        self.__runcmd(
+            '"{root}/lib/production.yml" "{root}:/home/{name}/app/docker-compose.yml"'.
+            format(root=root, **meta))
+
+        print('Deploying database...')
+        self.__runcmd(
+            '"{root}/data/database.sql" "{name}:/home/{name}/app/data/database.sql"'.
+            format(root=root, **meta))
+
+        print('Deploying uploads...')
+        self.__runcmd(
+            '"{root}/wp-content/uploads" "{name}:/home/{name}/app/wp-content"'.
+            format(root=root, **meta))
+
+    def theme(self):
+        print('Removing old version of {base_theme}...'.format(**meta))
+        self.__sshcmd(
+            'rm -rf /home/{name}/app/wp-content/themes/{base_theme}/*'.format(
+                **meta))
+
+        print('Deploying {base_theme}...'.format(**meta))
+        self.__runcmd(
+            '"{root}/wp-content/themes/{base_theme}" "{name}:/home/{name}/app/wp-content/themes"'.
+            format(root=root, **meta))
+
+    def plugins(self):
+        for plugin in meta['plugins']:
+            print('Removing old version of plugin "{plugin}"'.format(
+                plugin=plugin))
+            self.__sshcmd(
+                'rm -rf /home/{name}/app/wp-content/plugins/{plugin}/*'.format(
+                    plugin=plugin, **meta))
+
+            print('Deploying plugin "{plugin}"'.format(plugin=plugin))
+            self.__runcmd(
+                '"{root}/wp-content/plugins/{plugin}" "{name}:/home/{name}/app/wp-content/plugins"'.
+                format(root=root, plugin=plugin, **meta))
+
+    def finalize(self):
+        print('Adjusting filesystem permissions on remote host...')
+        self.__sshcmd(
+            'sudo chown -R www-data:{name} /home/{name}/app'.format(**meta))
+
+    def __runcmd(self, paths):
+        os.system('{command} {options} {paths}'.format(
+            command=self.cmd[0], options=self.cmd[1], paths=paths))
+
+    def __sshcmd(self, command):
+        cmd = 'docker-machine ssh' if self.cmd[0] == 'docker-machine' else 'ssh'
+        os.system('{exe} {name} "{command}"'.format(
+            exe=cmd, command=command, **meta))
+
+
+def main():
+    prechecks()
+    deploy = Deploy()
+    if args.initial:
+        deploy.initial()
+        if not args.all:
+            deploy.theme()
+            deploy.plugins()
+    if args.all:
+        deploy.theme()
+        deploy.plugins()
+    deploy.site()
+    deploy.finalize()
+
+
+main()

@@ -1,3 +1,5 @@
+#!/usr/bin/env python3.6
+
 import os
 import json
 import subprocess
@@ -17,8 +19,7 @@ class dirs:
                 root_path = path
             if path == '/':
                 raise FileNotFoundError(
-                    'Hit OS directory root without finding a package.json file'
-                )
+                    'Hit OS directory root without finding a package.json file')
             path = os.path.dirname(os.path.realpath('{}../'.format(path)))
         return root_path
 
