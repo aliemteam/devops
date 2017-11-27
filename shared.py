@@ -50,7 +50,7 @@ def ssh_init():
     has_ssh = subprocess.getoutput(
         'grep -c "Host {name}" ~/.ssh/config'.format(name=meta['name'])) == '1'
     if has_docker_machine:
-        return ('docker-machine', 'scp -rd')
+        return ('docker-machine', 'scp -r -d')
     elif has_ssh:
         return ('rsync', '-avz')
     else:
