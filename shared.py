@@ -7,7 +7,20 @@ from sys import exit
 
 class dirs:
     script_dir = os.path.dirname(os.path.realpath(__file__))
-    root_dir = os.path.dirname(os.path.realpath('{}../'.format(script_dir)))
+
+    @staticmethod
+    def root_dir():
+        path = dirs.script_dir
+        root_path = ''
+        while not root_path:
+            if os.path.isfile('{}/package.json'.format(path)):
+                root_path = path
+            if path == '/':
+                raise FileNotFoundError(
+                    'Hit OS directory root without finding a package.json file'
+                )
+            path = os.path.dirname(os.path.realpath('{}../'.format(path)))
+        return root_path
 
 
 def prechecks():
@@ -24,7 +37,7 @@ def prechecks():
 
 
 def server_meta():
-    with open('{}/package.json'.format(os.getcwd())) as packagejson:
+    with open('{}/package.json'.format(dirs.root_dir())) as packagejson:
         file = json.load(packagejson)
         return file['server']
 

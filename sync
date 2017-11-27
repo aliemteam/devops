@@ -56,8 +56,9 @@ class Sync:
 
 def main():
     prechecks()
-    sync = Sync(ssh_init())
-    sync.plugins()
+    print(dirs.root_dir())
+    # sync = Sync(ssh_init())
+    # sync.plugins()
 
 
 main()
