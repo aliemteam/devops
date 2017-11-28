@@ -52,7 +52,7 @@ class Deploy:
 
         print('Deploying docker-compose.yml...')
         self.__runcmd(
-            '"{root}/lib/production.yml" "{root}:/home/{name}/app/docker-compose.yml"'.
+            '"{root}/lib/production.yml" "{name}:/home/{name}/app/docker-compose.yml"'.
             format(root=root, **meta))
 
         print('Deploying database...')
