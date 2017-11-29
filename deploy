@@ -2,7 +2,7 @@
 """
 Performs deployment of project files.
 
-Direction of file transfer: Local -> Production
+Direction of file transfer: Local -> Production.
 
 Deletions are performed on production side. Old assets are removed before
 pushing new ones to ensure the removal of stale files.
