@@ -67,7 +67,7 @@ class Sync(object):
         print('Downloading theme from server...')
         self.cmd.rsync('{name}:/home/{name}/app/wp-content/themes/{base_theme}'
                        .format(**self.meta),
-                       '{root}/wp-content/plugins'.format(**self.meta))
+                       '{root}/wp-content/themes'.format(**self.meta))
         self.calls += 1
         return self
 
