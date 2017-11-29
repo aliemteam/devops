@@ -1,7 +1,7 @@
 {
   "name": "aliem-devops",
   "private": true,
-  "description": "",
+  "version": "0.1.0",
   "author": "Derek P Sifford",
   "license": "MIT",
   "bin": {
