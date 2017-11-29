@@ -35,7 +35,12 @@ class Sync(object):
 
     def __init__(self):
         self.cmd = CommandRunner()
-        self.meta = self.cmd.meta
+        self.meta = {
+            **self.cmd.meta,
+            'dirs': {
+                **vars(self.cmd.dirs),
+            },
+        }
         self.calls = 0
 
     def uploads(self) -> 'Sync':

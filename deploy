@@ -34,7 +34,12 @@ class Deploy(object):
 
     def __init__(self) -> None:
         self.cmd = CommandRunner()
-        self.meta = self.cmd.meta
+        self.meta = {
+            **self.cmd.meta,
+            'dirs': {
+                **vars(self.cmd.dirs),
+            },
+        }
 
     def site(self) -> None:
         """Deploy site (child theme) files."""
