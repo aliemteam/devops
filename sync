@@ -37,9 +37,7 @@ class Sync(object):
         self.cmd = CommandRunner()
         self.meta = {
             **self.cmd.meta,
-            'dirs': {
-                **vars(self.cmd.dirs),
-            },
+            'root': self.cmd.dirs.root,
         }
         self.calls = 0
 
@@ -48,7 +46,7 @@ class Sync(object):
         print('Downloading uploads from server...')
         self.cmd.rsync(
             '{name}:/home/{name}/app/wp-content/uploads/'.format(**self.meta),
-            '{dirs[root]}/wp-content/uploads'.format(**self.meta))
+            '{root}/wp-content/uploads'.format(**self.meta))
         self.calls += 1
         return self
 
@@ -60,7 +58,7 @@ class Sync(object):
             self.cmd.rsync(
                 '{name}:/home/{name}/app/wp-content/plugins/{plugin}'.format(
                     plugin=plugin, **self.meta),
-                '{dirs[root]}/wp-content/plugins'.format(**self.meta))
+                '{root}/wp-content/plugins'.format(**self.meta))
         self.calls += 1
         return self
 
@@ -69,15 +67,15 @@ class Sync(object):
         print('Downloading theme from server...')
         self.cmd.rsync('{name}:/home/{name}/app/wp-content/themes/{base_theme}'
                        .format(**self.meta),
-                       '{dirs[root]}/wp-content/plugins'.format(**self.meta))
+                       '{root}/wp-content/plugins'.format(**self.meta))
         self.calls += 1
         return self
 
     def database(self) -> 'Sync':
         """Rotate backup database and pull database."""
-        remove('{dirs[root]}/data/database.sql.bak'.format(**self.meta))
-        rename('{dirs[root]}/data/database.sql'.format(**self.meta),
-               '{dirs[root]}/data/database.sql.bak'.format(**self.meta))
+        remove('{root}/data/database.sql.bak'.format(**self.meta))
+        rename('{root}/data/database.sql'.format(**self.meta),
+               '{root}/data/database.sql.bak'.format(**self.meta))
 
         print('Exporting database...')
         self.cmd.ssh((
@@ -89,7 +87,7 @@ class Sync(object):
         print('Exporting database to local machine...')
         self.cmd.rsync(
             '{name}:/home/{name}/app/data/database.sql'.format(**self.meta),
-            '{dirs[root]}/data/database.sql'.format(**self.meta))
+            '{root}/data/database.sql'.format(**self.meta))
 
         self.calls += 1
         return self

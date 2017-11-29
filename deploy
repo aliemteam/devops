@@ -36,9 +36,7 @@ class Deploy(object):
         self.cmd = CommandRunner()
         self.meta = {
             **self.cmd.meta,
-            'dirs': {
-                **vars(self.cmd.dirs),
-            },
+            'root': self.cmd.dirs.root,
         }
 
     def site(self) -> None:
@@ -50,7 +48,7 @@ class Deploy(object):
 
         print('Deploying {name}...'.format(**self.meta))
         self.cmd.rsync(
-            '{dirs[root]}/dist/{name}'.format(**self.meta),
+            '{root}/dist/{name}'.format(**self.meta),
             '{name}:/home/{name}/app/wp-content/themes'.format(**self.meta))
 
     def initial(self) -> None:
@@ -60,27 +58,26 @@ class Deploy(object):
         Deploys all configuration and project files as well as all uploads.
         """
         for filename in ['.env', 'lib/production.yml', 'data/database.sql']:
-            if not isfile('{dirs[root]}/{file}'.format(
-                    file=filename, **self.meta)):
+            if not isfile('{root}/{file}'.format(file=filename, **self.meta)):
                 raise FileNotFoundError('File "{file}" could not be found'
                                         .format(file=filename))
 
         print('Deploying .env...')
-        self.cmd.rsync('{dirs[root]}/.env'.format(**self.meta),
+        self.cmd.rsync('{root}/.env'.format(**self.meta),
                        '{name}:/home/{name}/app/.env'.format(**self.meta))
 
         print('Deploying docker-compose.yml...')
         self.cmd.rsync(
-            '{dirs[root]}/lib/production.yml'.format(**self.meta),
+            '{root}/lib/production.yml'.format(**self.meta),
             '{name}:/home/{name}/app/docker-compose.yml'.format(**self.meta))
 
         print('Deploying database...')
         self.cmd.rsync(
-            '{dirs[root]}/data/database.sql'.format(**self.meta),
+            '{root}/data/database.sql'.format(**self.meta),
             '{name}:/home/{name}/app/data/database.sql'.format(**self.meta))
 
         print('Deploying uploads...')
-        self.cmd.rsync('{dirs[root]}/wp-content/uploads'.format(**self.meta),
+        self.cmd.rsync('{root}/wp-content/uploads'.format(**self.meta),
                        '{name}:/home/{name}/app/wp-content'.format(**self.meta))
 
     def theme(self) -> None:
@@ -91,7 +88,7 @@ class Deploy(object):
 
         print('Deploying {base_theme}...'.format(**self.meta))
         self.cmd.rsync(
-            '{dirs[root]}/wp-content/themes/{base_theme}'.format(**self.meta),
+            '{root}/wp-content/themes/{base_theme}'.format(**self.meta),
             '{name}:/home/{name}/app/wp-content/themes'.format(**self.meta))
 
     def plugins(self) -> None:
@@ -103,7 +100,7 @@ class Deploy(object):
                          .format(plugin=plugin, **self.meta))
 
             print('Deploying plugin "{plugin}"'.format(plugin=plugin))
-            self.cmd.rsync('{dirs[root]}/wp-content/plugins/{plugin}'.format(
+            self.cmd.rsync('{root}/wp-content/plugins/{plugin}'.format(
                 plugin=plugin, **self.meta),
                            '{name}:/home/{name}/app/wp-content/plugins'.format(
                                **self.meta))
