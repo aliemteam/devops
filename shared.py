@@ -1,71 +1,124 @@
-#!/usr/bin/env python3.6
-
-import os
-import json
-import subprocess
+"""This module holds code that is shared across 2 or more scripts."""
+from os import path, getenv
+from functools import lru_cache as memoize
+from json import load
+from shlex import split
+from subprocess import PIPE, Popen, getoutput, getstatusoutput
+from sys import exit as sys_exit
 from textwrap import dedent
-from sys import exit
+from typing import List, Mapping, Optional, TypeVar
+
+T = TypeVar('T', str, List[str])
 
 
-class dirs:
-    script_dir = os.path.dirname(os.path.realpath(__file__))
-
-    @staticmethod
-    def root_dir():
-        path = dirs.script_dir
-        root_path = ''
-        while not root_path:
-            if os.path.isfile('{}/package.json'.format(path)):
-                root_path = path
-            if path == '/':
-                raise FileNotFoundError(
-                    'Hit OS directory root without finding a package.json file')
-            path = os.path.dirname(os.path.realpath('{}../'.format(path)))
-        return root_path
-
-
-def prechecks():
+def prechecks(include_env=None) -> None:
+    """Check to see if the system has all external dependencies available"""
     executables = ['docker-machine', 'rsync']
     env = ['DIGITALOCEAN_ACCESS_TOKEN']
-    for e in executables:
-        if os.system('command -v {} >/dev/null'.format(e)) != 0:
-            print('{} must be installed to run this script'.format(e))
-            exit(1)
-    for v in env:
-        if not os.getenv(v, False):
-            print('Cannot locate environment variable {}'.format(v))
-            exit(1)
+    for ex in executables:
+        if getstatusoutput('command -v {}'.format(ex))[0] != 0:
+            print('{} must be installed to run this script'.format(ex))
+            sys_exit(1)
+    if include_env:
+        for var in env:
+            if not getenv(var, False):
+                print('Cannot locate environment variable {}'.format(var))
+                sys_exit(1)
 
 
-def server_meta():
-    with open('{}/package.json'.format(dirs.root_dir())) as packagejson:
-        file = json.load(packagejson)
-        return file['server']
+class Project(object):  # pylint: disable=too-few-public-methods
+    """Contains project-related metadata."""
+
+    def __init__(self):
+        self.dirs = self.Dirs()
+
+    class Dirs(object):
+        """Contains directory metadata"""
+
+        @property
+        def script(self) -> str:
+            """Return directory of currently executing script"""
+            return path.dirname(path.realpath(__file__))
+
+        @property  # type: ignore
+        @memoize(maxsize=1)
+        def root(self) -> str:
+            """Return root directory of current project."""
+            current_path = self.script
+            root = ''
+            while not root:
+                if path.isfile('{}/package.json'.format(current_path)):
+                    root = current_path
+                if current_path == '/':
+                    raise FileNotFoundError
+                current_path = path.dirname(
+                    path.realpath('{}../'.format(current_path)))
+            return root
+
+    @property
+    def meta(self) -> Optional[Mapping[str, T]]:
+        """Return a mapping of the "server" properties defined in the project's package.json."""
+        with open('{}/package.json'.format(self.dirs.root)) as pkg:
+            file = load(pkg)
+            server_meta = file['server']
+        return server_meta
 
 
-def ssh_init():
-    meta = server_meta()
-    has_docker_machine = subprocess.getoutput(
-        'docker-machine ls -q --filter "name=^{name}$" | wc -l | awk "{{ print $1 }}"'.format(
-            name=meta['name'])) == '1'
-    has_ssh = subprocess.getoutput(
-        'grep -c "Host {name}" ~/.ssh/config'.format(name=meta['name'])) == '1'
-    if has_docker_machine:
-        return ('docker-machine', 'scp -r -d')
-    elif has_ssh:
-        return ('rsync', '-avz')
-    else:
-        print(
-            dedent("""
-        ERROR: Could not locate a docker-machine or ssh identity for {name}
+class CommandRunner(object):
+    """Abstraction for running commands on server.
 
-        To enable SSH connections, add the following to your ~/.ssh/config file:
+    This abstraction is necessary because the connection to the server is could
+    either be via docker-machine or via regular ssh. Instances of this class
+    sort out which connection type to use and then run commands on both types
+    using the same interface.
+    """
+    dirs = Project().dirs
 
-        Host {name}
-            HostName <ip-address-of-server>
-            Port 22
-            User {name}
-            IdentityFile ~/.ssh/<name-of-our-private-key-file>
+    def __init__(self):
+        self.meta = Project().meta
+        has_docker_machine = getoutput(
+            "docker-machine ls -q --filter 'name=^{name}$' | wc -l"
+            .format(**self.meta)).strip() == '1'
+        has_ssh = getoutput('grep -c "Host {name}" ~/.ssh/config'
+                            .format(**self.meta)) == '1'
+        if has_docker_machine:
+            self.cmd = ('docker-machine', 'scp -r -d')
+        elif has_ssh:
+            self.cmd = ('rsync', '-avz')
+        else:
+            print(
+                dedent("""
+            ERROR: Could not locate a docker-machine or ssh identity for {name}
 
-        """.format(name=meta['name'])))
-        exit(1)
+            To enable SSH connections, add the following to your ~/.ssh/config file:
+
+            Host {name}
+                HostName <ip-address-of-server>
+                Port 22
+                User {name}
+                IdentityFile ~/.ssh/<name-of-our-private-key-file>
+
+            """.format(**self.meta)))
+            sys_exit(1)
+
+    def ssh(self, command: str) -> None:
+        """Run arbitrary command via SSH on server"""
+        cmd = 'docker-machine ssh' if self.cmd[0] == 'docker-machine' else 'ssh'
+        self.run('{exe} {name} "{command}"'.format(
+            exe=cmd, command=command, **self.meta))
+
+    def rsync(self, src: str, dest: str) -> None:
+        """Transfer files between server and local machine using rsync"""
+        self.run('{command} {options} "{src}" "{dest}"'.format(
+            command=self.cmd[0], options=self.cmd[1], src=src, dest=dest))
+
+    @staticmethod
+    def run(command: str) -> None:
+        """Run arbitrary command on local system."""
+        proc = Popen(split(command), stdout=PIPE)
+        while True:
+            stdout = proc.stdout.readline()
+            if proc.poll() is not None:
+                break
+            if stdout:
+                print(stdout.strip().decode('utf-8'))

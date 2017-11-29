@@ -1,104 +1,113 @@
 #!/usr/bin/env python3.6
+"""
+Performs non-destructive synchronization of project files.
 
-import argparse
-import os
+Direction of file transfer: Production -> Local
 
-from shared import dirs, prechecks, server_meta, ssh_init
+No deletions occur at any point
+"""
+from argparse import ArgumentParser
+from os import remove, rename
 
-meta = server_meta()
-
-parser = argparse.ArgumentParser()
-parser.add_argument(
-    '-i',
-    '--init',
-    help='Syncs everything. Run this on initial setup',
-    action='store_true')
-parser.add_argument('-u', '--uploads', help='Sync uploads', action='store_true')
-parser.add_argument('-p', '--plugins', help='Sync plugins', action='store_true')
-parser.add_argument('-t', '--theme', help='Sync theme', action='store_true')
-parser.add_argument(
-    '-d', '--database', help='Sync database', action='store_true')
-args = parser.parse_args()
+from shared import CommandRunner, prechecks
 
 
-class Sync:
+def parse_args():
+    """Return parsed command line arguments."""
+    parser = ArgumentParser()
+    parser.add_argument(
+        '-i',
+        '--init',
+        help='Syncs everything. Run this on initial setup',
+        action='store_true')
+    parser.add_argument(
+        '-u', '--uploads', help='Sync uploads', action='store_true')
+    parser.add_argument(
+        '-p', '--plugins', help='Sync plugins', action='store_true')
+    parser.add_argument('-t', '--theme', help='Sync theme', action='store_true')
+    parser.add_argument(
+        '-d', '--database', help='Sync database', action='store_true')
+    return parser.parse_args()
 
-    def __init__(self, cmd):
-        self.cmd = cmd
-        self.root_dir = dirs.root_dir()
 
-    def uploads(self):
+class Sync(object):
+    """Perform all sync actions."""
+
+    def __init__(self):
+        self.cmd = CommandRunner()
+        self.meta = self.cmd.meta
+        self.calls = 0
+
+    def uploads(self) -> 'Sync':
+        """Pull all uploads."""
         print('Downloading uploads from server...')
-        self.__runcmd(
-            '"{name}:/home/{name}/app/wp-content/uploads/" "{root}/wp-content/uploads"'.
-            format(name=meta['name'], root=self.root_dir))
+        self.cmd.rsync(
+            '{name}:/home/{name}/app/wp-content/uploads/'.format(**self.meta),
+            '{dirs[root]}/wp-content/uploads'.format(**self.meta))
+        self.calls += 1
+        return self
 
-    def plugins(self):
+    def plugins(self) -> 'Sync':
+        """Pull plugins."""
         print('Downloading plugins from server...')
-        paths = '"{name}:/home/{name}/app/wp-content/plugins/{plugin}" "{root}/wp-content/plugins"'
-        for plugin in meta['plugins']:
+        for plugin in self.meta['plugins']:
             print('--> Downloading plugin {}'.format(plugin))
-            self.__runcmd(
-                paths.format(
-                    name=meta['name'], plugin=plugin, root=self.root_dir))
+            self.cmd.rsync(
+                '{name}:/home/{name}/app/wp-content/plugins/{plugin}'.format(
+                    plugin=plugin, **self.meta),
+                '{dirs[root]}/wp-content/plugins'.format(**self.meta))
+        self.calls += 1
+        return self
 
-    def theme(self):
+    def theme(self) -> 'Sync':
+        """Pull base theme."""
         print('Downloading theme from server...')
-        self.__runcmd(
-            '"{name}:/home/{name}/app/wp-content/themes/{theme}" "{root}/wp-content/plugins"'.
-            format(
-                name=meta['name'], theme=meta['base_theme'],
-                root=self.root_dir))
+        self.cmd.rsync('{name}:/home/{name}/app/wp-content/themes/{base_theme}'
+                       .format(**self.meta),
+                       '{dirs[root]}/wp-content/plugins'.format(**self.meta))
+        self.calls += 1
+        return self
 
-    def database(self):
-        command = 'ssh' if self.cmd[0] == 'ssh' else 'docker-machine ssh'
-        os.remove('{root}/data/database.sql.bak'.format(root=self.root_dir))
-        os.rename(
-            '{root}/data/database.sql'.format(root=self.root_dir),
-            '{root}/data/database.sql.bak'.format(root=self.root_dir))
+    def database(self) -> 'Sync':
+        """Rotate backup database and pull database."""
+        remove('{dirs[root]}/data/database.sql.bak'.format(**self.meta))
+        rename('{dirs[root]}/data/database.sql'.format(**self.meta),
+               '{dirs[root]}/data/database.sql.bak'.format(**self.meta))
 
         print('Exporting database...')
-        os.system(
-            '{command} {name} "sudo -u {name} docker-compose -f /home/{name}/app/docker-compose.yml \
-                exec -T wordpress /bin/bash -c \
-                    \'wp db export /data/database.sql --allow-root\'"'.format(
-                command=command, name=meta['name']))
+        self.cmd.ssh((
+            'sudo -u {name} docker-compose -f /home/{name}/app/docker-compose.yml '
+            'exec -T wordpress /bin/bash -c '
+            "'wp db export /data/database.sql --allow-root'"
+        ).format(**self.meta))
 
         print('Exporting database to local machine...')
-        self.__runcmd(
-            '"{name}:/home/{name}/app/data/database.sql" "{root}/data/database.sql"'.
-            format(name=meta['name'], root=self.root_dir))
+        self.cmd.rsync(
+            '{name}:/home/{name}/app/data/database.sql'.format(**self.meta),
+            '{dirs[root]}/data/database.sql'.format(**self.meta))
 
-    def __runcmd(self, paths):
-        os.system('{command} {options} {paths}'.format(
-            command=self.cmd[0], options=self.cmd[1], paths=paths))
+        self.calls += 1
+        return self
 
 
 def main():
+    """Main entrypoint."""
+    args = parse_args()
     prechecks()
-    sync = Sync(ssh_init())
-    arg_count = 0
+    sync = Sync()
     if args.init:
-        sync.database()
-        sync.plugins()
-        sync.theme()
-        sync.uploads()
-        return
+        return sync.database().plugins().theme().uploads()
     if args.uploads:
         sync.uploads()
-        arg_count += 1
     if args.plugins:
         sync.plugins()
-        arg_count += 1
     if args.theme:
         sync.theme()
-        arg_count += 1
     if args.database:
         sync.database()
-        arg_count += 1
-    if arg_count == 0:
-        sync.database()
-        sync.uploads()
+    if sync.calls == 0:
+        sync.database().uploads()
 
 
-main()
+if __name__ == '__main__':
+    main()

@@ -1,3 +1,5 @@
 package.json
 __pycache__
 .vscode/.ropeproject
+*.py[cod]
+.mypy_cache

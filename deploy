@@ -1,110 +1,118 @@
 #!/usr/bin/env python3.6
+"""
+Performs deployment of project files.
 
-import argparse
-import os
-from sys import exit
+Direction of file transfer: Local -> Production
 
-from shared import dirs, server_meta, ssh_init, prechecks
+Deletions are performed on production side. Old assets are removed before
+pushing new ones to ensure the removal of stale files.
+"""
+from argparse import ArgumentParser
+from os.path import isfile
 
-parser = argparse.ArgumentParser()
-parser.add_argument(
-    '-a',
-    '--all',
-    help='Deploy all plugins, base theme, and child theme',
-    action='store_true')
-parser.add_argument(
-    '-i',
-    '--initial',
-    help='Deploy everything including configs, database, & uploads',
-    action='store_true')
-args = parser.parse_args()
-
-meta = server_meta()
-root = dirs.root_dir()
+from shared import CommandRunner, prechecks
 
 
-class Deploy:
+def parse_args():
+    """Return parsed command line arguments."""
+    parser = ArgumentParser()
+    parser.add_argument(
+        '-a',
+        '--all',
+        help='Deploy all plugins, base theme, and child theme',
+        action='store_true')
+    parser.add_argument(
+        '-i',
+        '--initial',
+        help='Deploy everything including configs, database, & uploads',
+        action='store_true')
+    return parser.parse_args()
 
-    def __init__(self):
-        self.cmd = ssh_init()
 
-    def site(self):
-        print('Removing old version of {name}...'.format(**meta))
-        self.__sshcmd(
-            'rm -rf /home/{name}/app/wp-content/themes/{name}/*'.format(**meta))
+class Deploy(object):
+    """Perform all deploy actions."""
 
-        print('Deploying {name}...'.format(**meta))
-        self.__runcmd(
-            '"{root}/dist/{name}" "{name}:/home/{name}/app/wp-content/themes"'.
-            format(root=root, **meta))
+    def __init__(self) -> None:
+        self.cmd = CommandRunner()
+        self.meta = self.cmd.meta
 
-    def initial(self):
+    def site(self) -> None:
+        """Deploy site (child theme) files."""
+        print('Removing old version of {name}...'.format(**self.meta))
+        self.cmd.ssh(
+            'rm -rf /home/{name}/app/wp-content/themes/{name}/*'.format(
+                **self.meta))
+
+        print('Deploying {name}...'.format(**self.meta))
+        self.cmd.rsync(
+            '{dirs[root]}/dist/{name}'.format(**self.meta),
+            '{name}:/home/{name}/app/wp-content/themes'.format(**self.meta))
+
+    def initial(self) -> None:
+        """Deploy everything.
+
+        This should only be ran once after initially building a new droplet.
+        Deploys all configuration and project files as well as all uploads.
+        """
         for filename in ['.env', 'lib/production.yml', 'data/database.sql']:
-            if not os.path.isfile('{root}/{file}'.format(
-                    root=root, file=filename)):
-                raise FileNotFoundError(
-                    'File "{file}" could not be found'.format(file=filename))
-                exit(1)
+            if not isfile('{dirs[root]}/{file}'.format(
+                    file=filename, **self.meta)):
+                raise FileNotFoundError('File "{file}" could not be found'
+                                        .format(file=filename))
 
         print('Deploying .env...')
-        self.__runcmd('"{root}/.env" "{name}:/home/{name}/app/.env"'.format(
-            root=root, **meta))
+        self.cmd.rsync('{dirs[root]}/.env'.format(**self.meta),
+                       '{name}:/home/{name}/app/.env'.format(**self.meta))
 
         print('Deploying docker-compose.yml...')
-        self.__runcmd(
-            '"{root}/lib/production.yml" "{name}:/home/{name}/app/docker-compose.yml"'.
-            format(root=root, **meta))
+        self.cmd.rsync(
+            '{dirs[root]}/lib/production.yml'.format(**self.meta),
+            '{name}:/home/{name}/app/docker-compose.yml'.format(**self.meta))
 
         print('Deploying database...')
-        self.__runcmd(
-            '"{root}/data/database.sql" "{name}:/home/{name}/app/data/database.sql"'.
-            format(root=root, **meta))
+        self.cmd.rsync(
+            '{dirs[root]}/data/database.sql'.format(**self.meta),
+            '{name}:/home/{name}/app/data/database.sql'.format(**self.meta))
 
         print('Deploying uploads...')
-        self.__runcmd(
-            '"{root}/wp-content/uploads" "{name}:/home/{name}/app/wp-content"'.
-            format(root=root, **meta))
+        self.cmd.rsync('{dirs[root]}/wp-content/uploads'.format(**self.meta),
+                       '{name}:/home/{name}/app/wp-content'.format(**self.meta))
 
-    def theme(self):
-        print('Removing old version of {base_theme}...'.format(**meta))
-        self.__sshcmd(
-            'rm -rf /home/{name}/app/wp-content/themes/{base_theme}/*'.format(
-                **meta))
+    def theme(self) -> None:
+        """Deploy base theme."""
+        print('Removing old version of {base_theme}...'.format(**self.meta))
+        self.cmd.ssh('rm -rf /home/{name}/app/wp-content/themes/{base_theme}/*'
+                     .format(**self.meta))
 
-        print('Deploying {base_theme}...'.format(**meta))
-        self.__runcmd(
-            '"{root}/wp-content/themes/{base_theme}" "{name}:/home/{name}/app/wp-content/themes"'.
-            format(root=root, **meta))
+        print('Deploying {base_theme}...'.format(**self.meta))
+        self.cmd.rsync(
+            '{dirs[root]}/wp-content/themes/{base_theme}'.format(**self.meta),
+            '{name}:/home/{name}/app/wp-content/themes'.format(**self.meta))
 
-    def plugins(self):
-        for plugin in meta['plugins']:
-            print('Removing old version of plugin "{plugin}"'.format(
-                plugin=plugin))
-            self.__sshcmd(
-                'rm -rf /home/{name}/app/wp-content/plugins/{plugin}/*'.format(
-                    plugin=plugin, **meta))
+    def plugins(self) -> None:
+        """Deploy all plugins."""
+        for plugin in self.meta['plugins']:
+            print('Removing old version of plugin "{plugin}"'
+                  .format(plugin=plugin))
+            self.cmd.ssh('rm -rf /home/{name}/app/wp-content/plugins/{plugin}/*'
+                         .format(plugin=plugin, **self.meta))
 
             print('Deploying plugin "{plugin}"'.format(plugin=plugin))
-            self.__runcmd(
-                '"{root}/wp-content/plugins/{plugin}" "{name}:/home/{name}/app/wp-content/plugins"'.
-                format(root=root, plugin=plugin, **meta))
+            self.cmd.rsync('{dirs[root]}/wp-content/plugins/{plugin}'.format(
+                plugin=plugin, **self.meta),
+                           '{name}:/home/{name}/app/wp-content/plugins'.format(
+                               **self.meta))
 
-    def finalize(self):
+    def finalize(self) -> None:
+        """Adjust ownership of project files on remote filesystem"""
         print('Adjusting filesystem permissions on remote host...')
-        self.__sshcmd(
-            'sudo chown -R www-data:{name} /home/{name}/app'.format(**meta))
-
-    def __runcmd(self, paths):
-        os.system('{command} {options} {paths}'.format(
-            command=self.cmd[0], options=self.cmd[1], paths=paths))
-
-    def __sshcmd(self, command):
-        cmd = 'docker-machine ssh' if self.cmd[0] == 'docker-machine' else 'ssh'
-        os.system('{exe} {name} "{command}"'.format(
-            exe=cmd, command=command, **meta))
+        self.cmd.ssh('sudo chown -R www-data:{name} /home/{name}/app'
+                     .format(**self.meta))
 
 
 def main():
+    """Main entrypoint."""
+    args = parse_args()
     prechecks()
     deploy = Deploy()
     if args.initial:
@@ -119,4 +127,5 @@ def main():
     deploy.finalize()
 
 
-main()
+if __name__ == '__main__':
+    main()
