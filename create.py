@@ -21,7 +21,7 @@ def docker_compose_version() -> str:
 def create_machine() -> str:
     """Create docker-machine on DigitalOcean."""
     name = input('--> Droplet name: ')
-    size = input('--> Droplet size [2gb]: ') or '2gb'
+    size = input('--> Droplet size [2gb]: ') or 's-1vcpu-2gb'
     dirname = CommandRunner.dirs.script
     with NamedTemporaryFile(mode='w+') as tmp:
         with open('{}/cloud-config.yml'.format(dirname)) as config:
